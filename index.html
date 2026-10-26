@@ -99,6 +99,31 @@
     opacity:0.6;
   }
 
+  .tabs{display:flex;justify-content:center;gap:8px;margin-top:14px;}
+  .tab{border:1px solid var(--gold-soft);background:transparent;color:var(--gold-soft);font:inherit;font-size:13px;padding:6px 20px;border-radius:999px;cursor:pointer;}
+  .tab.on{background:var(--gold-soft);color:var(--teal-deep);font-weight:700;}
+  .row-meta{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:12.5px;color:var(--ink-soft);}
+  .row-time{white-space:nowrap;}
+  .plan-input{flex:1 1 200px;min-width:0;border:1px dashed var(--line);border-radius:10px;padding:6px 10px;font:inherit;font-size:13px;color:var(--ink);background:var(--sand-card);}
+  .row-plan{color:var(--ink);}
+  .cal-wrap{display:none;width:100%;max-width:520px;margin:-24px auto 40px;padding:0 18px;position:relative;z-index:2;}
+  .cal-card{background:#fff;border-radius:22px;padding:18px 14px;box-shadow:0 6px 24px rgba(19,36,32,.08);margin-bottom:14px;}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .cal-head h2,.day-title{margin:0;font-size:20px;color:var(--teal-deep);text-align:center;}
+  .cal-nav{border:0;background:#EEF1E8;border-radius:10px;width:36px;height:36px;font-size:20px;cursor:pointer;color:var(--teal);}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;direction:rtl;}
+  .cal-dow{text-align:center;font-weight:700;font-size:13px;color:var(--ink-soft);padding:6px 0;}
+  .cal-day{aspect-ratio:1/1;border-radius:14px;background:#E7ECDF;display:flex;align-items:center;justify-content:center;font:inherit;font-weight:900;font-size:17px;color:var(--teal);border:2px solid transparent;padding:0;}
+  .cal-day.saved{background:var(--done);color:#fff;cursor:pointer;}
+  .cal-day.today{border-color:var(--gold);}
+  .cal-day.empty{background:transparent;}
+  .day-row{padding:10px 0;border-bottom:1px solid var(--line);font-size:14.5px;color:var(--ink);}
+  .day-sub{font-size:12.5px;color:var(--ink-soft);margin-top:2px;}
+  .day-sub-title{margin:14px 0 4px;font-size:15px;color:var(--absent);}
+  .day-bar{display:flex;gap:8px;margin-top:14px;}
+  .cal-btn{border:0;border-radius:10px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;background:#EEF1E8;color:var(--teal);}
+  .cal-btn.danger{background:var(--absent-soft);color:var(--absent);}
+
   /* ===== Main container ===== */
   .wrap{
     width:100%;
@@ -614,8 +639,11 @@
   <div class="kicker">تسجيل الحضور والغياب</div>
   <h1>حلقة الفجر أ. أسماء</h1>
   <p class="date-line" id="dateLine"></p>
-  <div class="arc-motif"><span></span><span></span><span id="secretDot"></span><span></span><span></span></div>
+  <div class="arc-motif"><span></span><span></span><span id="secretDot"></span><span id="teacherDot"></span><span></span></div>
+  <div class="tabs"><button type="button" class="tab on" id="tabToday">اليوم</button><button type="button" class="tab" id="tabCal">التقويم</button></div>
 </div>
+
+<div class="cal-wrap" id="calView"><div class="cal-card" id="calCard"></div><div class="cal-card" id="dayCard" style="display:none"></div></div>
 
 <div class="wrap">
 
@@ -652,7 +680,7 @@
       </div>
     </div>
     <div class="confirm-box" id="confirmBox">
-      سيتم مسح جميع الأسماء وحالات التسميع والمراجعة والغياب نهائيًا. هل أنتِ متأكدة؟
+      ستُحفظ هذه الصفحة في التقويم ثم تُمسح القائمة الحالية. هل أنتِ متأكدة؟
       <div class="confirm-actions">
         <button class="btn btn-confirm-yes" id="confirmYes">نعم، إعادة التعيين</button>
         <button class="btn btn-confirm-no" id="confirmNo">تراجع</button>
@@ -750,7 +778,7 @@
   // ================================================================
 
   function defaultState(){
-    return { students: [], nextId: 1, absentees: [], nextAbsentId: 1, dayStartTime: null, manualOverride: null };
+    return { students: [], nextId: 1, absentees: [], nextAbsentId: 1, dayStartTime: null, manualOverride: null, history: {}, pageDay: null };
   }
 
   let state = defaultState();
@@ -778,6 +806,7 @@
   const absentCountPill = document.getElementById('absentCountPill');
 
   async function saveState(){
+    archiveToday();
     try{
       await supabaseClient
         .from('halqa_state')
@@ -882,6 +911,8 @@
   }
 
   function render(){
+    const act = document.activeElement;
+    const keepPlan = (act && act.classList && act.classList.contains('plan-input')) ? act.value : null;
     studentsString.innerHTML = '';
     if(state.students.length === 0){
       emptyState.style.display = 'block';
@@ -909,11 +940,12 @@
         doneWrap.className = 'check-wrap';
         const doneLabel = document.createElement('span');
         doneLabel.className = 'check-label';
-        doneLabel.textContent = 'تسميع';
+        doneLabel.textContent = 'المعلمة';
         const doneBox = document.createElement('input');
         doneBox.type = 'checkbox';
         doneBox.className = 'chk-done';
         doneBox.checked = s.done;
+        doneBox.disabled = !isTeacher();
         doneBox.setAttribute('aria-label', 'تأشير حالة التسميع لـ ' + s.name);
         doneBox.addEventListener('change', async () => {
           const checked = doneBox.checked;
@@ -936,6 +968,7 @@
         reviewBox.type = 'checkbox';
         reviewBox.className = 'chk-review';
         reviewBox.checked = s.reviewed;
+        reviewBox.disabled = (s.id !== myId);
         reviewBox.setAttribute('aria-label', 'تأشير حالة المراجعة لـ ' + s.name);
         reviewBox.addEventListener('change', async () => {
           const checked = reviewBox.checked;
@@ -970,19 +1003,56 @@
           render();
         });
 
+        const meta = document.createElement('div');
+        meta.className = 'row-meta';
+        if(s.t){
+          const tm = document.createElement('span');
+          tm.className = 'row-time';
+          tm.textContent = '🕓 ' + fmtTime(s.t);
+          meta.appendChild(tm);
+        }
+        if(s.id === myId){
+          const pi = document.createElement('input');
+          pi.type = 'text';
+          pi.className = 'plan-input';
+          pi.maxLength = 120;
+          pi.placeholder = 'ماذا ستسمّعين اليوم؟ مثال: سورة الشعراء من آية ٧-١٠';
+          pi.value = s.plan || '';
+          pi.addEventListener('change', async () => {
+            const v = pi.value.trim();
+            await refreshState();
+            const target = state.students.find(x => x.id === s.id);
+            if(target) target.plan = v;
+            await saveState();
+          });
+          meta.appendChild(pi);
+        } else if(s.plan){
+          const pt = document.createElement('span');
+          pt.className = 'row-plan';
+          pt.textContent = s.plan;
+          meta.appendChild(pt);
+        }
+
         row.appendChild(bead);
         row.appendChild(nameEl);
         row.appendChild(checksGroup);
         row.appendChild(deleteBtn);
+        row.appendChild(meta);
         studentsString.appendChild(row);
       });
     }
     countPill.textContent = state.students.length + ' طالبة';
+    if(keepPlan !== null){
+      const pi = studentsString.querySelector('.plan-input');
+      if(pi){ pi.value = keepPlan; pi.focus(); }
+    }
     renderMyStatus();
+    if(calView.style.display === 'block' && dayCard.style.display === 'none') renderCal();
   }
 
   async function performReset(){
-    state = defaultState();
+    archiveToday();
+    state = Object.assign(defaultState(), { history: state.history || {} });
     await saveState();
     myId = null;
     await saveMyId(null);
@@ -1012,7 +1082,7 @@
       state.dayStartTime = Date.now();
     }
     const newId = state.nextId++;
-    state.students.push({ id: newId, name: name, done: false, reviewed: false });
+    state.students.push({ id: newId, name: name, done: false, reviewed: false, plan: '', t: Date.now() });
     await saveState();
     myId = newId;
     await saveMyId(newId);
@@ -1148,6 +1218,125 @@
       year: 'numeric'
     });
     dateLine.textContent = formatted;
+  }
+
+  // ====== المعلمة / الوقت / الأرشيف ======
+  function isTeacher(){ try{ return localStorage.getItem('halqa-teacher') === '1'; }catch(e){ return false; } }
+  function fmtTime(ms){ return new Date(ms).toLocaleTimeString('en-GB', { timeZone: 'Asia/Riyadh', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); }
+  function meccaDateKey(ms){ return new Date(ms || Date.now()).toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' }); }
+  function archiveToday(){
+    if(!state.history) state.history = {};
+    if(state.students.length || state.absentees.length){
+      if(!state.pageDay) state.pageDay = meccaDateKey(state.students[0] && state.students[0].t);
+      state.history[state.pageDay] = { students: state.students, absentees: state.absentees };
+    } else if(state.pageDay){
+      delete state.history[state.pageDay];
+      state.pageDay = null;
+    }
+  }
+  let teacherTaps = 0, teacherTimer = null;
+  document.getElementById('teacherDot').addEventListener('click', () => {
+    teacherTaps++;
+    clearTimeout(teacherTimer);
+    teacherTimer = setTimeout(() => { teacherTaps = 0; }, 2500);
+    if(teacherTaps >= 5){
+      teacherTaps = 0;
+      try{ localStorage.setItem('halqa-teacher', isTeacher() ? '0' : '1'); }catch(e){}
+      render();
+    }
+  });
+
+  // ====== التقويم ======
+  const tabToday = document.getElementById('tabToday');
+  const tabCal = document.getElementById('tabCal');
+  const calView = document.getElementById('calView');
+  const calCard = document.getElementById('calCard');
+  const dayCard = document.getElementById('dayCard');
+  const wrapEl = document.querySelector('.wrap');
+  let calYear = null, calMonth = 0;
+  const pad2 = n => String(n).padStart(2, '0');
+  const arNum = n => String(n).replace(/\d/g, x => '٠١٢٣٤٥٦٧٨٩'[x]);
+  function mk(tag, cls, text){ const e = document.createElement(tag); if(cls) e.className = cls; if(text !== undefined) e.textContent = text; return e; }
+
+  function showTab(cal){
+    if(cal && calYear === null){
+      const p = meccaDateKey().split('-');
+      calYear = +p[0]; calMonth = +p[1] - 1;
+    }
+    wrapEl.style.display = cal ? 'none' : '';
+    calView.style.display = cal ? 'block' : 'none';
+    tabToday.classList.toggle('on', !cal);
+    tabCal.classList.toggle('on', cal);
+    if(cal){ dayCard.style.display = 'none'; calCard.style.display = 'block'; renderCal(); }
+  }
+  tabToday.addEventListener('click', () => showTab(false));
+  tabCal.addEventListener('click', () => showTab(true));
+
+  function renderCal(){
+    const hist = state.history || {};
+    const todayKey = meccaDateKey();
+    const first = new Date(Date.UTC(calYear, calMonth, 1));
+    const total = new Date(Date.UTC(calYear, calMonth + 1, 0)).getUTCDate();
+    calCard.innerHTML = '';
+    const head = mk('div', 'cal-head');
+    const prev = mk('button', 'cal-nav', '›'); prev.type = 'button';
+    const next = mk('button', 'cal-nav', '‹'); next.type = 'button';
+    prev.addEventListener('click', () => { calMonth--; if(calMonth < 0){ calMonth = 11; calYear--; } renderCal(); });
+    next.addEventListener('click', () => { calMonth++; if(calMonth > 11){ calMonth = 0; calYear++; } renderCal(); });
+    head.appendChild(prev);
+    head.appendChild(mk('h2', '', first.toLocaleDateString('ar-EG-u-ca-gregory', { month: 'long', year: 'numeric', timeZone: 'UTC' })));
+    head.appendChild(next);
+    calCard.appendChild(head);
+    const grid = mk('div', 'cal-grid');
+    'ح ن ث ر خ ج س'.split(' ').forEach(d => grid.appendChild(mk('div', 'cal-dow', d)));
+    for(let i = 0; i < first.getUTCDay(); i++) grid.appendChild(mk('div', 'cal-day empty'));
+    for(let d = 1; d <= total; d++){
+      const key = calYear + '-' + pad2(calMonth + 1) + '-' + pad2(d);
+      const saved = !!hist[key];
+      const b = mk('button', 'cal-day' + (saved ? ' saved' : '') + (key === todayKey ? ' today' : ''), arNum(d));
+      b.type = 'button';
+      if(saved) b.addEventListener('click', () => openDay(key));
+      grid.appendChild(b);
+    }
+    calCard.appendChild(grid);
+  }
+
+  function openDay(key){
+    const day = (state.history || {})[key];
+    if(!day) return;
+    dayCard.innerHTML = '';
+    dayCard.appendChild(mk('h2', 'day-title', new Date(key + 'T12:00:00Z').toLocaleDateString('ar-EG-u-ca-gregory', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })));
+    (day.students || []).forEach((s, i) => {
+      const r = mk('div', 'day-row');
+      r.appendChild(mk('div', '', (i + 1) + '. ' + s.name + (s.reviewed ? '  ✓ مراجعة' : '') + (s.done ? '  ✓ تسميع' : '')));
+      const sub = [];
+      if(s.t) sub.push('🕓 ' + fmtTime(s.t));
+      if(s.plan) sub.push(s.plan);
+      if(sub.length) r.appendChild(mk('div', 'day-sub', sub.join(' — ')));
+      dayCard.appendChild(r);
+    });
+    if((day.absentees || []).length){
+      dayCard.appendChild(mk('h3', 'day-sub-title', 'الغائبات'));
+      day.absentees.forEach(a => dayCard.appendChild(mk('div', 'day-row', a.name + (a.reason ? ' — ' + a.reason : ''))));
+    }
+    const bar = mk('div', 'day-bar');
+    const back = mk('button', 'cal-btn', 'رجوع للتقويم'); back.type = 'button';
+    back.addEventListener('click', () => { dayCard.style.display = 'none'; calCard.style.display = 'block'; renderCal(); });
+    bar.appendChild(back);
+    if(key !== state.pageDay){
+      const del = mk('button', 'cal-btn danger', 'حذف هذا اليوم'); del.type = 'button';
+      del.addEventListener('click', async () => {
+        if(!window.confirm('حذف صفحة هذا اليوم من التقويم نهائيًا؟')) return;
+        await refreshState();
+        if(state.history) delete state.history[key];
+        await saveState();
+        dayCard.style.display = 'none'; calCard.style.display = 'block'; renderCal();
+      });
+      bar.appendChild(del);
+    }
+    dayCard.appendChild(bar);
+    calCard.style.display = 'none';
+    dayCard.style.display = 'block';
   }
 
   async function pollForUpdates(){
