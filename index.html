@@ -615,7 +615,6 @@
   <h1>حلقة الفجر أ. أسماء</h1>
   <p class="date-line" id="dateLine"></p>
   <div class="arc-motif"><span></span><span></span><span id="secretDot"></span><span></span><span></span></div>
-  <p class="hint" id="overrideBadge" style="display:none;margin-top:8px;"></p>
 </div>
 
 <div class="wrap">
@@ -731,12 +730,6 @@
     registrationCard.classList.toggle('locked', !open);
     regHint.textContent = open ? REG_OPEN_HINT : REG_CLOSED_HINT;
     regHint.classList.toggle('locked-hint', !open);
-    if(state.manualOverride === 'open'){
-      overrideBadge.style.display = 'block';
-      overrideBadge.textContent = 'التسجيل مفتوح الآن يدويًا للتجربة';
-    } else {
-      overrideBadge.style.display = 'none';
-    }
   }
 
   // ====== العلامة السرية: النقر ٥ مرات على نقطة وسط الزخرفة يفتح/يغلق القفل يدويًا ======
@@ -768,7 +761,6 @@
   const registrationCard = document.getElementById('registrationCard');
   const regHint = document.getElementById('regHint');
   const secretDot = document.getElementById('secretDot');
-  const overrideBadge = document.getElementById('overrideBadge');
   const myStatus = document.getElementById('myStatus');
   const studentsString = document.getElementById('studentsString');
   const emptyState = document.getElementById('emptyState');
@@ -830,6 +822,7 @@
             render();
             renderAbsentees();
             renderMyStatus();
+            updateRegistrationLock();
           }
         }
       )
